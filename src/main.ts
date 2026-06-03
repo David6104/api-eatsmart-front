@@ -117,6 +117,10 @@ async function init() {
           <div class="cart-total">
             <strong>Total : <span id="total-prix">0.00</span>€</strong>
           </div>
+          <div style="margin-top: 15px; display: flex; gap: 10px;">
+            <button type="button" class="btn-clear" >Vider</button>
+            <button type="button" class="btn-validate">Valider la commande</button>
+          </div>
         </aside>
       </div>
     `;
@@ -136,6 +140,68 @@ async function init() {
        
         mettreAJourPanier(); 
       });
+    });
+
+    // IMPLEMENTATION DES DETECTEURS DE CLICS POUR LES DEUX NOUVEAUX BOUTONS
+    const boutonVider = document.querySelector<HTMLButtonElement>('.btn-clear');
+    const boutonValider = document.querySelector<HTMLButtonElement>('.btn-validate');
+
+    // Action : Vider le panier
+    boutonVider?.addEventListener('click', () => {
+      panier.length = 0; // Vide le tableau sans casser la constante
+      mettreAJourPanier(); // Force la mise à jour visuelle du panier
+    });
+
+    // Action : Valider la commande (Envoi POST vers l'API PHP)
+    boutonValider?.addEventListener('click', async () => {
+      if (panier.length === 0) return; // Empêche d'envoyer une commande vide
+
+      // 1. Calcul du total exact
+      let total = 0;
+      for (const art of panier) {
+        total += parseFloat(art.PrixArticle);
+      }
+
+      // 2. Regroupement par ID et calcul des quantités pour l'API assoc_article_commande
+      const quantites: { [key: string]: number } = {};
+      panier.forEach(art => {
+        quantites[art.idArticle] = (quantites[art.idArticle] || 0) + 1;
+      });
+
+      const articlesFormates = Object.keys(quantites).map(id => ({
+        id_article: parseInt(id),
+        quantite: quantites[id]
+      }));
+
+      // 3. Préparation de l'objet JSON requis par CommandeController.php
+      const commandeBody = {
+        id_commande: Math.floor(Math.random() * 100000), // ID unique aléatoire
+        date_commande: new Date().toISOString().slice(0, 10), // Format MySQL YYYY-MM-DD
+        prix_total: total,
+        etat: "en cours",
+        articles: articlesFormates
+      };
+
+      try {
+        const response = await fetch('http://localhost/David-api-eatsmart/commandes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(commandeBody)
+        });
+
+        if (response.ok) {
+          panier.length = 0; // Vide le panier après le succès
+          mettreAJourPanier(); // Réinitialise l'affichage
+
+          // Affiche un message de confirmation à la place du texte du panier
+          const cartItemsDiv = document.querySelector<HTMLDivElement>('#cart-items');
+          if (cartItemsDiv) {
+            cartItemsDiv.innerHTML = '<p>Commande envoyée en cuisine !</p>';
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors de l'envoi de la commande :", error);
+      }
     });
   }
 }
